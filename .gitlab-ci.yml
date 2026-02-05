@@ -1,0 +1,60 @@
+# Cache node modules - speeds up future builds
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules
+stages:
+  - build
+  - deploy
+variables:
+  S3_BUCKET_DEV: ${BUCKET_DEV}
+  S3_BUCKET_PROD: ${BUCKET_PROD}
+  DIST_ID_DEV: ${CLOUDFRONT_DIST_ID_DEV}
+  DIST_ID_PROD: ${CLOUDFRONT_DIST_ID_PROD}
+.yarn_build:
+  image: node:16.10.0
+  script: |
+    yarn # Install dependencies
+    cp -R public/ build/
+    yarn build # Build command
+  artifacts:
+    paths:
+      - ./build
+
+yarn_prod:
+  extends: .yarn_build
+  stage: build
+  before_script:
+    - export APP_ENV="prod"
+  only:
+    refs:
+      - main
+.deploy_aws:
+  image: python:latest
+  when: always
+  script: |
+    pip install awscli
+    aws s3 sync ./build/ s3://${S3_BUCKET} --exclude "index.html" --exclude "index.html.gz"
+    aws s3 cp ./build/index.html s3://${S3_BUCKET}/index.html \
+    --metadata-directive REPLACE \
+    --cache-control "no-cache, no-store, must-revalidate" \
+    --expires "0" \
+    --content-type "text/html"
+    aws s3 cp ./build/index.html.gz s3://${S3_BUCKET}/index.html.gz \
+    --metadata-directive REPLACE \
+    --cache-control "no-cache, no-store, must-revalidate" \
+    --expires "0" \
+    --content-type "text/html" \
+    --content-encoding "gzip"
+    aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DIST_ID} --paths "/*"
+deploy_prod:
+  extends: .deploy_aws
+  stage: deploy
+  dependencies:
+    - yarn_prod
+  before_script:
+    - export S3_BUCKET=${S3_BUCKET_PROD}
+    - export CLOUDFRONT_DIST_ID=${DIST_ID_PROD}
+  only:
+    refs:
+      - main

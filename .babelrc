@@ -1,0 +1,16 @@
+{
+  "plugins": [
+    ["module-resolver", {
+      "root": ["./src"],
+      "alias": {
+        "@travelsim": "./src/apps/Travelsim",
+        "@airalo": "./src/apps/Airalo",
+        "@config": "./src/config",
+        "@utils": "./src/utils",
+        "@constants": "./src/constants",
+        "@assets": "./src/assets",
+        "@components": "./src/components"
+      }
+    }]
+  ]
+}
